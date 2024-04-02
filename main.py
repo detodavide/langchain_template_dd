@@ -8,22 +8,16 @@ from fastapi import (
     UploadFile,
     File,
     Depends,
-    Query,
     Body,
     status,
 )
-from langchain.schema import Document
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.document_loaders import PyPDFLoader, PyPDFium2Loader
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from sqlalchemy.orm import Session
 from io import BytesIO
-from typing import Annotated, Optional
+from typing import Optional
 
 from models.validators.document_model import DocumentModel
-from models.validators.user import UserModel
 from models.validators.document_response import DocumentResponse
 from datasource.pg_vector_store import AsnyPgVector
 from datasource.store_factory import get_vector_store
@@ -31,7 +25,7 @@ from docs_builder.add_docs import add_documents
 from docs_builder.formats.from_pdf import docs_from_pdf
 from PyPDF2 import PdfReader
 from utils.env_variables import get_env_variable, load_db_variables
-from datasource.pg_session import SessionLocal, engine, Base
+from datasource.pg_session import engine, Base
 from models.tables import *
 from routes import router as main_router
 from contextlib import asynccontextmanager
@@ -182,6 +176,7 @@ async def delete_documents(ids: list[str]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Simple endpoint for answering questions
 @app.post("/chat/")
 async def quick_response(
     question: str,
