@@ -24,12 +24,19 @@ from utils.env_variables import get_env_variable, load_db_variables
 from datasource.pg_session import SessionLocal, engine, Base
 from models.tables import *
 from routes import router as main_router
+from contextlib import asynccontextmanager
 
 
 load_dotenv(find_dotenv())
 
-app = FastAPI()
-Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(main_router)
 
@@ -70,17 +77,6 @@ except ValueError as e:
     raise HTTPException(status_code=500, detail=str(e))
 except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
-
-
-# @app.post("/user-create")
-# async def create_user(user: UserModel, db: db_dependency):
-#     try:
-#         db_user = User(username=user.username, name=user.name)
-#         db.add(db_user)
-#         db.commit()
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#     return user
 
 
 @app.post("/add-documents/")
