@@ -7,10 +7,13 @@ from PyPDF2 import PdfReader
 
 
 def get_path():
+    """
+    This was just for educational purpose. Loading data from filesystem
+    """
     parent_path = os.getcwd()
     docs_path = "/docs_builder/formats/"
     filename = "mamba_linear-time-sequence.pdf"
-    return parent_path + docs_path + filename, filename[:-4]
+    return parent_path + docs_path + filename, filename.split(".")[0]
 
 
 def docs_from_pdf(pdf_reader: PdfReader | None = None, pdf_name: str = ""):
