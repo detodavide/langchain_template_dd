@@ -15,7 +15,7 @@ SECRET_KEY = get_env_variable("SECRET_TOKEN_KEY")
 def authenticate_user(username: str, password: str, db: Session):
     user = db.query(User).filter(User.username == username).first()
     if not user or not bcrypt.checkpw(
-        password.encode("utf-8"), user.hashed_password.encode("urf-8")
+        password.encode("utf-8"), user.hashed_password.encode("utf-8")
     ):
         return False
     return user
@@ -28,7 +28,7 @@ def create_access_token(data: dict, expires_delta: datetime.timedelta = None):
     else:
         expire = datetime.datetime.now() + datetime.timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algotithm="HS256")
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
 
