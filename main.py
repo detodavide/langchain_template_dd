@@ -1,7 +1,17 @@
 import os
+from operator import itemgetter
 
 from dotenv import find_dotenv, load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, Body
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    UploadFile,
+    File,
+    Depends,
+    Query,
+    Body,
+    status,
+)
 from langchain.schema import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.document_loaders import PyPDFLoader, PyPDFium2Loader
@@ -25,6 +35,8 @@ from datasource.pg_session import SessionLocal, engine, Base
 from models.tables import *
 from routes import router as main_router
 from contextlib import asynccontextmanager
+from utils.auth.user_auth import get_current_user
+from utils.langfuse_handler import get_trace_handler
 
 
 load_dotenv(find_dotenv())
@@ -54,19 +66,26 @@ try:
     pgvector_store = get_vector_store(
         connection_string=CONNECTION_STRING,
         embeddings=embeddings,
-        collection_name="test_collection",
+        collection_name="mamba_linear-time-sequence",
         mode=mode,
     )
     retriever = pgvector_store.as_retriever()
+
     template = """Answer the question based only on the following context:
     {context}
 
+    Always speak to the user with his/her name: {name}. Never forget the user's name. Say Hello {name}
     Question: {question}
     """
+
     prompt = ChatPromptTemplate.from_template(template)
     model = ChatOpenAI(model_name="gpt-3.5-turbo")
     chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
+        {
+            "context": itemgetter("question") | retriever,
+            "question": itemgetter("question"),
+            "name": itemgetter("name"),
+        }
         | prompt
         | model
         | StrOutputParser()
@@ -164,6 +183,16 @@ async def delete_documents(ids: list[str]):
 
 
 @app.post("/chat/")
-async def quick_response(msg: str):
-    result = chain.invoke(msg)
+async def quick_response(
+    question: str,
+    user: User = Depends(get_current_user),
+    handler=Depends(get_trace_handler),
+):
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated"
+        )
+    print("Question:", question)
+    query = {"question": question, "name": user.username}
+    result = await chain.ainvoke(query, config={"callbacks": [handler]})
     return result
