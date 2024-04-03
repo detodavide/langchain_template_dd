@@ -94,15 +94,6 @@ except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/create-schema")
-def create_schema_db():
-    try:
-        record_manager.create_schema()
-        return {"message": "Schema Created"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/add-documents/")
 async def add_documents_endpoint(documents: list[DocumentModel]):
     return await add_documents(documents, pgvector_store)
