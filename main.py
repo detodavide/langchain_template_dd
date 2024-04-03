@@ -17,11 +17,11 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from io import BytesIO
 from typing import Optional
 from langchain.indexes import SQLRecordManager, index
+from langchain.indexes.base import RecordManager
+from langchain.vectorstores.pgvector import PGVector
 
 from models.validators.document_model import DocumentModel
 from models.validators.document_response import DocumentResponse
-from datasource.pg_vector_store import AsnyPgVector
-from datasource.store_factory import get_vector_store
 from docs_builder.add_docs import add_documents
 from docs_builder.formats.from_pdf import docs_from_pdf
 from PyPDF2 import PdfReader
@@ -32,6 +32,7 @@ from routes import router as main_router
 from contextlib import asynccontextmanager
 from utils.auth.user_auth import get_current_user
 from utils.langfuse_handler import get_trace_handler
+from models.validators.record_manager_model import CleanupMethod
 
 
 load_dotenv(find_dotenv())
@@ -49,10 +50,6 @@ app.include_router(main_router)
 
 
 try:
-    USE_ASYNC = os.getenv("USE_ASYNC", "False").lower() == "true"
-    if USE_ASYNC:
-        print("Async project used")
-
     CONNECTION_STRING = load_db_variables()
     COLLECTION_NAME = "mamba_linear-time-sequence"
     OPENAI_API_KEY = get_env_variable("OPENAI_API_KEY")
@@ -60,15 +57,14 @@ try:
     record_manager = SQLRecordManager(
         namespace=f"pgvector/{COLLECTION_NAME}", db_url=CONNECTION_STRING
     )
+    record_manager.create_schema()
 
-    mode = "async" if USE_ASYNC else "sync"
-    pgvector_store = get_vector_store(
+    pgvector_store = PGVector(
         connection_string=CONNECTION_STRING,
-        embeddings=embeddings,
+        embedding_function=embeddings,
         collection_name=COLLECTION_NAME,
-        mode=mode,
     )
-    index()
+
     retriever = pgvector_store.as_retriever()
 
     template = """Answer the question based only on the following context:
@@ -98,6 +94,15 @@ except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/create-schema")
+def create_schema_db():
+    try:
+        record_manager.create_schema()
+        return {"message": "Schema Created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/add-documents/")
 async def add_documents_endpoint(documents: list[DocumentModel]):
     return await add_documents(documents, pgvector_store)
@@ -107,6 +112,7 @@ async def add_documents_endpoint(documents: list[DocumentModel]):
 async def add_documents_from_file(
     file: UploadFile = File(...),
     collection_name: Optional[str] = Body(None, description="Optional collection name"),
+    cleanup: CleanupMethod = Body(CleanupMethod.incremental),
 ):
     """
     Upload a pdf file and store data to the vector_db
@@ -117,69 +123,17 @@ async def add_documents_from_file(
             pdf_stream = BytesIO(pdf_content)
             pdf_reader = PdfReader(pdf_stream)
             documents = docs_from_pdf(pdf_reader=pdf_reader, pdf_name=file.filename)
-            new_pgvector_store = get_vector_store(
-                embeddings=embeddings,
+            new_pgvector_store = PGVector(
+                embedding_function=embeddings,
                 collection_name=(
                     collection_name if collection_name else file.filename.split(".")[0]
                 ),
                 connection_string=CONNECTION_STRING,
-                mode=mode,
             )
 
         return await add_documents(
-            documents, record_manager, new_pgvector_store, digest=False
+            documents, record_manager, new_pgvector_store, cleanup
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/get-all-ids/")
-async def get_all_ids():
-    try:
-        if isinstance(pgvector_store, AsnyPgVector):
-            ids = await pgvector_store.get_all_ids()
-        else:
-            ids = pgvector_store.get_all_ids()
-
-        return ids
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/get-documents-by-ids/", response_model=list[DocumentResponse])
-async def get_documents_by_ids(ids: list[str]):
-    try:
-        if isinstance(pgvector_store, AsnyPgVector):
-            existing_ids = await pgvector_store.get_all_ids()
-            documents = await pgvector_store.get_documents_by_ids(ids)
-        else:
-            existing_ids = pgvector_store.get_all_ids()
-            documents = pgvector_store.get_documents_by_ids(ids)
-
-        if not all(id in existing_ids for id in ids):
-            raise HTTPException(status_code=404, detail="One or more IDs not found")
-
-        return documents
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/delete-documents/")
-async def delete_documents(ids: list[str]):
-    try:
-        if isinstance(pgvector_store, AsnyPgVector):
-            existing_ids = await pgvector_store.get_all_ids()
-            await pgvector_store.delete(ids=ids)
-        else:
-            existing_ids = pgvector_store.get_all_ids()
-            pgvector_store.delete(ids=ids)
-
-        if not all(id in existing_ids for id in ids):
-            raise HTTPException(status_code=404, detail="One or more IDs not found")
-
-        return {"message": f"{len(ids)} documents deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
