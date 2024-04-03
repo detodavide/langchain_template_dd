@@ -16,6 +16,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from io import BytesIO
 from typing import Optional
+from langchain.indexes import SQLRecordManager, index
 
 from models.validators.document_model import DocumentModel
 from models.validators.document_response import DocumentResponse
@@ -53,16 +54,21 @@ try:
         print("Async project used")
 
     CONNECTION_STRING = load_db_variables()
+    COLLECTION_NAME = "mamba_linear-time-sequence"
     OPENAI_API_KEY = get_env_variable("OPENAI_API_KEY")
     embeddings = OpenAIEmbeddings()
+    record_manager = SQLRecordManager(
+        namespace=f"pgvector/{COLLECTION_NAME}", db_url=CONNECTION_STRING
+    )
 
     mode = "async" if USE_ASYNC else "sync"
     pgvector_store = get_vector_store(
         connection_string=CONNECTION_STRING,
         embeddings=embeddings,
-        collection_name="mamba_linear-time-sequence",
+        collection_name=COLLECTION_NAME,
         mode=mode,
     )
+    index()
     retriever = pgvector_store.as_retriever()
 
     template = """Answer the question based only on the following context:
@@ -120,7 +126,9 @@ async def add_documents_from_file(
                 mode=mode,
             )
 
-        return await add_documents(documents, new_pgvector_store, digest=False)
+        return await add_documents(
+            documents, record_manager, new_pgvector_store, digest=False
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
