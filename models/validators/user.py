@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UserModel(BaseModel):
@@ -8,6 +8,8 @@ class UserModel(BaseModel):
 
 
 class UserIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     username: str
     password: str
 

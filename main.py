@@ -19,6 +19,8 @@ from typing import Optional
 from langchain.indexes import SQLRecordManager, index
 from langchain.indexes.base import RecordManager
 from langchain.vectorstores.pgvector import PGVector
+from langfuse.callback.langchain import LangchainCallbackHandler
+from fastapi.middleware.cors import CORSMiddleware
 
 from models.validators.document_model import DocumentModel
 from models.validators.document_response import DocumentResponse
@@ -33,6 +35,8 @@ from contextlib import asynccontextmanager
 from utils.auth.user_auth import get_current_user
 from utils.langfuse_handler import get_trace_handler
 from models.validators.record_manager_model import CleanupMethod
+from models.validators.chat import ChatResponse
+from starlette.responses import JSONResponse
 
 
 load_dotenv(find_dotenv())
@@ -45,8 +49,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
 app.include_router(main_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 try:
@@ -108,39 +118,34 @@ async def add_documents_from_file(
     """
     Upload a pdf file and store data to the vector_db
     """
-    try:
-        if file.filename.endswith(".pdf"):
-            pdf_content = await file.read()
-            pdf_stream = BytesIO(pdf_content)
-            pdf_reader = PdfReader(pdf_stream)
-            documents = docs_from_pdf(pdf_reader=pdf_reader, pdf_name=file.filename)
-            new_pgvector_store = PGVector(
-                embedding_function=embeddings,
-                collection_name=(
-                    collection_name if collection_name else file.filename.split(".")[0]
-                ),
-                connection_string=CONNECTION_STRING,
-            )
-
-        return await add_documents(
-            documents, record_manager, new_pgvector_store, cleanup
+    if file.filename.endswith(".pdf"):
+        pdf_content = await file.read()
+        pdf_stream = BytesIO(pdf_content)
+        pdf_reader = PdfReader(pdf_stream)
+        documents = docs_from_pdf(pdf_reader=pdf_reader, pdf_name=file.filename)
+        new_pgvector_store = PGVector(
+            embedding_function=embeddings,
+            collection_name=(
+                collection_name if collection_name else file.filename.split(".")[0]
+            ),
+            connection_string=CONNECTION_STRING,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return await add_documents(documents, record_manager, new_pgvector_store, cleanup)
 
 
 # Simple endpoint for answering questions
-@app.post("/chat/")
+@app.post("/chat/", response_model=ChatResponse)
 async def quick_response(
     question: str,
     user: User = Depends(get_current_user),
-    handler=Depends(get_trace_handler),
+    handler: LangchainCallbackHandler = Depends(get_trace_handler),
 ):
     if user is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not authenticated",
         )
-    print("Question:", question)
     query = {"question": question, "name": user.username}
     result = await chain.ainvoke(query, config={"callbacks": [handler]})
-    return result
+    return {"message": result}

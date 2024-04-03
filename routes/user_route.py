@@ -10,11 +10,8 @@ router = APIRouter()
 
 @router.get("/read")
 async def get_users(db: db_dependency):
-    try:
-        users = db.query(User).all()
-        return users
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    users = db.query(User).all()
+    return users
 
 
 @router.post("/create")

@@ -1,28 +1,18 @@
-import asyncio
+import requests
 
-import httpx
+# Define the URL
+url = "http://localhost:8000/users/create"
 
+# Define the payload (data to be sent in the POST request)
+payload = {
+    "username": "exampldddeeee_user",
+    "password": "example_password",
+    "randomthings": "sss",
+}
 
-async def make_request(endpoint, params=None):
-    url = f"http://localhost:6677/{endpoint}"
-    async with httpx.AsyncClient(timeout=20) as client:
-        if params:
-            response = await client.post(url, params=params)
-        else:
-            response = await client.get(url)
+# Make the POST request
+response = requests.post(url, json=payload)
 
-        if response.status_code == 200:
-            print(f"Response from {endpoint}: {response.json()}")
-        else:
-            print(f"Error from {endpoint}: {response.status_code}")
-            print("Response content:", response.text)
-
-
-async def main():
-    chat_params = {"msg": "How much does a beer cost?"}
-    tasks = [make_request("get-all-ids/"), make_request("chat/", params=chat_params)]
-    await asyncio.gather(*tasks)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Print the response status code and content
+print("Response Status Code:", response.status_code)
+print("Response Content:", response.content.decode())
