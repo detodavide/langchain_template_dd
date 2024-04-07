@@ -37,6 +37,7 @@ from utils.langfuse_handler import get_trace_handler
 from models.validators.record_manager_model import CleanupMethod
 from models.validators.chat import ChatResponse
 from starlette.responses import JSONResponse
+from utils.app_startup import *
 
 
 load_dotenv(find_dotenv())
@@ -45,6 +46,8 @@ load_dotenv(find_dotenv())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    await init_db_embedding_manager(app)
+    await init_model_chain(app)
     yield
 
 
@@ -57,51 +60,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-try:
-    CONNECTION_STRING = load_db_variables()
-    COLLECTION_NAME = "mamba_linear-time-sequence"
-    OPENAI_API_KEY = get_env_variable("OPENAI_API_KEY")
-    embeddings = OpenAIEmbeddings()
-    record_manager = SQLRecordManager(
-        namespace=f"pgvector/{COLLECTION_NAME}", db_url=CONNECTION_STRING
-    )
-    record_manager.create_schema()
-
-    pgvector_store = PGVector(
-        connection_string=CONNECTION_STRING,
-        embedding_function=embeddings,
-        collection_name=COLLECTION_NAME,
-    )
-
-    retriever = pgvector_store.as_retriever()
-
-    template = """Answer the question based only on the following context:
-    {context}
-
-    Always speak to the user with his/her name: {name}. Never forget the user's name. Say Hello {name}
-    Question: {question}
-    """
-
-    prompt = ChatPromptTemplate.from_template(template)
-    model = ChatOpenAI(model_name="gpt-3.5-turbo")
-    chain = (
-        {
-            "context": itemgetter("question") | retriever,
-            "question": itemgetter("question"),
-            "name": itemgetter("name"),
-        }
-        | prompt
-        | model
-        | StrOutputParser()
-    )
-
-
-except ValueError as e:
-    raise HTTPException(status_code=500, detail=str(e))
-except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/add-documents/")
@@ -132,20 +90,3 @@ async def add_documents_from_file(
         )
 
     return await add_documents(documents, record_manager, new_pgvector_store, cleanup)
-
-
-# Simple endpoint for answering questions
-@app.post("/chat/", response_model=ChatResponse)
-async def quick_response(
-    question: str,
-    user: User = Depends(get_current_user),
-    handler: LangchainCallbackHandler = Depends(get_trace_handler),
-):
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not authenticated",
-        )
-    query = {"question": question, "name": user.username}
-    result = await chain.ainvoke(query, config={"callbacks": [handler]})
-    return {"message": result}
