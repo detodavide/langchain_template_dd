@@ -77,6 +77,7 @@ async def add_documents_from_file(
     file: UploadFile = File(...),
     collection_name: Optional[str] = Body(None, description="Optional collection name"),
     cleanup: CleanupMethod = Body(CleanupMethod.incremental),
+    llm_dependancy: LLMDependancy = Depends(get_llm_dependancy),
 ):
     """
     Upload a pdf file and store data to the vector_db
@@ -86,12 +87,9 @@ async def add_documents_from_file(
         pdf_stream = BytesIO(pdf_content)
         pdf_reader = PdfReader(pdf_stream)
         documents = docs_from_pdf(pdf_reader=pdf_reader, pdf_name=file.filename)
-        new_pgvector_store = PGVector(
-            embedding_function=embeddings,
-            collection_name=(
-                collection_name if collection_name else file.filename.split(".")[0]
-            ),
-            connection_string=CONNECTION_STRING,
-        )
-
-    return await add_documents(documents, record_manager, new_pgvector_store, cleanup)
+    return await add_documents(
+        documents,
+        llm_dependancy.get_record_manager(),
+        llm_dependancy.get_vectorstore(),
+        cleanup,
+    )

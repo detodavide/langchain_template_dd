@@ -1,13 +1,7 @@
-from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
-from operator import itemgetter
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import VectorStoreRetriever
-from llm.db_embedding_manager import DBEmbeddingManager
 from langchain_core.runnables.base import RunnableSerializable
 from typing import Any
-
-from llm.template import DEFAULT_TEMPLATE
+from langchain.indexes import SQLRecordManager, index
 from fastapi import Depends, Request
 from langchain_core.vectorstores import VectorStore
 
@@ -21,6 +15,12 @@ class LLMDependancy:
 
     def get_retriever(self) -> VectorStoreRetriever:
         return self.request.app.state.db_embedding_manager.retriever
+
+    def get_vectorstore(self) -> VectorStore:
+        return self.request.app.state.db_embedding_manager.vector_store
+
+    def get_record_manager(self) -> SQLRecordManager:
+        return self.request.app.state.db_embedding_manager.record_manager
 
 
 def get_llm_dependancy(request: Request) -> LLMDependancy:
