@@ -23,13 +23,7 @@ async def send_message(
     handler: LangchainCallbackHandler = Depends(get_trace_handler),
     llmhandler: LLMDependancy = Depends(get_llm_dependancy),
 ):
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not authenticated",
-        )
-    query = {"question": question, "name": user.username}
-    chain: RunnableSerializable[Any, str] = llmhandler.get_chain()
+    chain, query = await build_chain_and_query(question, user, llmhandler)
     result = await chain.ainvoke(query, config={"callbacks": [handler]})
     return {"message": result}
 
@@ -41,18 +35,26 @@ async def chat_message_streaming(
     handler: LangchainCallbackHandler = Depends(get_trace_handler),
     llmhandler: LLMDependancy = Depends(get_llm_dependancy),
 ) -> StreamingResponse:
+    chain, query = await build_chain_and_query(question, user, llmhandler)
+    return StreamingResponse(
+        stream_result(chain, query, handler),
+        media_type="application/json",
+    )
+
+
+# UTILS
+async def build_chain_and_query(
+    question: str,
+    user: User = Depends(get_current_user),
+    llmhandler: LLMDependancy = Depends(get_llm_dependancy),
+) -> RunnableSerializable[Any, str]:
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not authenticated",
         )
     query = {"question": question, "name": user.username}
-    chain: RunnableSerializable[Any, str] = llmhandler.get_chain()
-
-    return StreamingResponse(
-        stream_result(chain, query, handler),
-        media_type="application/json",
-    )
+    return llmhandler.get_chain(), query
 
 
 async def stream_result(
