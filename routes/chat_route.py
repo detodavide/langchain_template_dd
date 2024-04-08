@@ -6,9 +6,8 @@ from utils.auth.user_auth import get_current_user
 from utils.langfuse_handler import get_trace_handler
 from models.validators.chat import ChatResponse
 from langchain_core.runnables.base import RunnableSerializable
-from utils.llm_handler import get_chain
 from typing import Any
-from utils.llm_handler import get_chain
+from utils.llm_handler import get_llm_dependancy, LLMDependancy
 
 router = APIRouter()
 
@@ -18,7 +17,7 @@ async def send_message(
     question: str,
     user: User = Depends(get_current_user),
     handler: LangchainCallbackHandler = Depends(get_trace_handler),
-    chain: RunnableSerializable[Any, str] = Depends(get_chain),
+    llmhandler: LLMDependancy = Depends(get_llm_dependancy),
 ):
     if user is None:
         raise HTTPException(
@@ -26,5 +25,6 @@ async def send_message(
             detail="User not authenticated",
         )
     query = {"question": question, "name": user.username}
+    chain: RunnableSerializable[Any, str] = llmhandler.get_chain()
     result = await chain.ainvoke(query, config={"callbacks": [handler]})
     return {"message": result}

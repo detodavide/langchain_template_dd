@@ -7,14 +7,21 @@ from llm.db_embedding_manager import DBEmbeddingManager
 from langchain_core.runnables.base import RunnableSerializable
 from typing import Any
 
-from utils.env_variables import load_db_variables, get_env_variable
 from llm.template import DEFAULT_TEMPLATE
 from fastapi import Depends, Request
+from langchain_core.vectorstores import VectorStore
 
 
-def get_chain(request: Request) -> RunnableSerializable[Any, str]:
-    return request.app.state.model_chain.chain
+class LLMDependancy:
+    def __init__(self, request: Request):
+        self.request = request
+
+    def get_chain(self) -> RunnableSerializable[Any, str]:
+        return self.request.app.state.model_chain.chain
+
+    def get_retriever(self) -> VectorStoreRetriever:
+        return self.request.app.state.db_embedding_manager.retriever
 
 
-def get_retriever():
-    return
+def get_llm_dependancy(request: Request) -> LLMDependancy:
+    return LLMDependancy(request)

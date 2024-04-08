@@ -1,19 +1,24 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.indexes import SQLRecordManager, index
 from langchain.indexes.base import RecordManager
+from langchain.vectorstores import VectorStore
 from langchain.vectorstores.pgvector import PGVector
+from langchain_core.vectorstores import VectorStoreRetriever
 
 
 class DBEmbeddingManager:
     def __init__(
-        self, connection_string, collection_name, embeddings=OpenAIEmbeddings()
+        self,
+        connection_string: str,
+        collection_name: str,
+        embeddings=OpenAIEmbeddings(),
     ):
-        self.connection_string = connection_string
-        self.collection_name = collection_name
+        self.connection_string: str = connection_string
+        self.collection_name: str = collection_name
         self.embeddings = embeddings
-        self.record_manager = None
-        self.pgvector_store = None
-        self.retriever = None
+        self.record_manager: SQLRecordManager | None = None
+        self.vector_store: VectorStore | None = None
+        self.retriever: VectorStoreRetriever | None = None
         self.initialize()
 
     def initialize(self):
@@ -22,9 +27,9 @@ class DBEmbeddingManager:
         )
         self.record_manager.create_schema()
 
-        self.pgvector_store = PGVector(
+        self.vector_store = PGVector(
             connection_string=self.connection_string,
             embedding_function=self.embeddings,
             collection_name=self.collection_name,
         )
-        self.retriever = self.pgvector_store.as_retriever()
+        self.retriever = self.vector_store.as_retriever()

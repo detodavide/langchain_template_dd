@@ -18,7 +18,7 @@ from io import BytesIO
 from typing import Optional
 from langchain.indexes import SQLRecordManager, index
 from langchain.indexes.base import RecordManager
-from langchain.vectorstores.pgvector import PGVector
+from langchain.vectorstores import VectorStore
 from langfuse.callback.langchain import LangchainCallbackHandler
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -38,6 +38,7 @@ from models.validators.record_manager_model import CleanupMethod
 from models.validators.chat import ChatResponse
 from starlette.responses import JSONResponse
 from utils.app_startup import *
+from utils.llm_handler import get_llm_dependancy, LLMDependancy
 
 
 load_dotenv(find_dotenv())
@@ -63,8 +64,12 @@ app.add_middleware(
 
 
 @app.post("/add-documents/")
-async def add_documents_endpoint(documents: list[DocumentModel]):
-    return await add_documents(documents, pgvector_store)
+async def add_documents_endpoint(
+    documents: list[DocumentModel],
+    llm_dependancy: LLMDependancy = Depends(get_llm_dependancy),
+):
+    retriever: VectorStore = llm_dependancy.get_retriever()
+    return await add_documents(documents, retriever)
 
 
 @app.post("/upload-pdf-file/")
