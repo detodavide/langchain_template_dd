@@ -45,8 +45,8 @@ async def chat_message_streaming(
 # UTILS
 async def build_chain_and_query(
     question: str,
-    user: User = Depends(get_current_user),
-    llmhandler: LLMDependancy = Depends(get_llm_dependancy),
+    user: User,
+    llmhandler: LLMDependancy,
 ) -> RunnableSerializable[Any, str]:
     if user is None:
         raise HTTPException(
