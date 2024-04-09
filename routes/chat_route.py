@@ -19,11 +19,10 @@ router = APIRouter()
 @router.post("/send-message", response_model=ChatResponse)
 async def send_message(
     question: str,
-    user: User = Depends(get_current_user),
     handler: LangchainCallbackHandler = Depends(get_trace_handler),
     llmhandler: LLMDependancy = Depends(get_llm_dependancy),
 ):
-    chain, query = await build_chain_and_query(question, user, llmhandler)
+    chain, query = await build_chain_and_query(question, llmhandler)
     result = await chain.ainvoke(query, config={"callbacks": [handler]})
     return {"message": result}
 
@@ -31,11 +30,10 @@ async def send_message(
 @router.post("/message-streaming")
 async def chat_message_streaming(
     question: str,
-    user: User | None = Depends(get_current_user),
     handler: LangchainCallbackHandler = Depends(get_trace_handler),
     llmhandler: LLMDependancy = Depends(get_llm_dependancy),
 ) -> StreamingResponse:
-    chain, query = await build_chain_and_query(question, user, llmhandler)
+    chain, query = await build_chain_and_query(question, llmhandler)
     return StreamingResponse(
         stream_result(chain, query, handler),
         media_type="application/json",
@@ -45,15 +43,14 @@ async def chat_message_streaming(
 # UTILS
 async def build_chain_and_query(
     question: str,
-    user: User,
     llmhandler: LLMDependancy,
 ) -> RunnableSerializable[Any, str]:
-    if user is None:
+    if llmhandler.user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not authenticated",
         )
-    query = {"question": question, "name": user.username}
+    query = {"question": question, "name": llmhandler.user.username}
     return llmhandler.get_chain(), query
 
 

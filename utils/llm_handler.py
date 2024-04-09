@@ -34,10 +34,10 @@ class LLMDependancy:
         self,
         connection_string: str = load_db_variables(),
         collection_name: str = "mamba_linear-time-sequence",
-    ):
+    ) -> DBEmbeddingManager:
         return DBEmbeddingManager(connection_string, collection_name)
 
-    def _init_model_chain(self):
+    def _init_model_chain(self) -> ModelChain:
         model_chain: ModelChain = ModelChain(self.db_embedding_manager)
         model_chain.setup_chain()
         return model_chain
