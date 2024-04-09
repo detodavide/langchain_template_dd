@@ -47,8 +47,6 @@ load_dotenv(find_dotenv())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    await init_db_embedding_manager(app)
-    await init_model_chain(app)
     yield
 
 
